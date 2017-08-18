@@ -183,10 +183,10 @@ for (n in c(1:3)){
 # add an overidentifying retsriction to the A matrix, excluding cpi from taylor rule
 
 triang = A + B
-
+triang[3,1] = 0
 #A[5, 1:4] <- c(0, 0, 0, 0)
 #A[2,1] <- 0
-svar_tri <- SVAR(mod_s_tri, estmethod = "direct", Bmat = triang, hessian=TRUE)
+svar_tri <- SVAR(mod_s_tri, estmethod = "scoring", Bmat = triang, hessian=TRUE)
 svar_tri$LR
 
 # compare the estimmated triangular B matrix to th cholesky decomposition
