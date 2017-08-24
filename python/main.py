@@ -6,15 +6,16 @@ Created on Fri Aug 18 16:31:06 2017
 """
 import numpy as np
 
-e, pi, y, pc, m  = np.loadtxt(r"..\data\epiypcomm_Jan92_Feb17.txt").transpose()
-data = np.concatenate([pc[:,np.newaxis], e[:,np.newaxis], pi[:,np.newaxis], y[:,np.newaxis],  m[:,np.newaxis]], axis=1)
+e, cpi, y, pc, m  = np.loadtxt(r"..\data\epiypcomm_Jan92_Feb17.txt").transpose()
+data = np.concatenate([pc[:,np.newaxis], e[:,np.newaxis], cpi[:,np.newaxis], y[:,np.newaxis],  m[:,np.newaxis]], axis=1)
 data.shape
+data = data[1:, :]
 
 from VECMml import VECM
 
 p = 4
 r = 1
-var_names = ['pc', 'e', 'pi', 'y', 'm']
+var_names = ['pc', 'e', 'cpi', 'y', 'm']
 shocks = ['commodity', 'target', 'cost-push', 'demand', 'monetary policy']
 model = VECM(data, p, r, var_names=var_names, shock_names=shocks)
 
@@ -22,10 +23,10 @@ print('\nReduced form residual covariance matrix Sigma:\n',
       model.Sigma_u)
 #print(model.beta)
 model.normalize()
-print('\nComnpanion matrix form of the VAR:\n', model.companion)
+#print('\nComnpanion matrix form of the VAR:\n', model.companion)
 #print(model.beta)
-model.get_LR_impact()
-print('\nshort run estimates Gamma\n:', model.Gamma)
+#model.get_LR_impact()
+#print('\nshort run estimates Gamma\n:', model.Gamma)
 
 print('\nlong run matrix XI:\n', model.Xi)
 
@@ -51,7 +52,7 @@ model.set_restrictions(SR, LR)
 B0inv_guess = np.random.rand(3,3)#np.linalg.cholesky(model.Sigma_u)
 #errs = model.restriction_errors(B0inv_guess)
 #print(errs)
-model.get_B0inv()
+model.get_B0inv(B0inv_guess)
 #print(model.opt_res)
 
 print('\nResult for B0inv:\n', model.B0inv)

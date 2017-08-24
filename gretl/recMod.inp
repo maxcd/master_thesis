@@ -1,0 +1,73 @@
+# turn extra output off
+set echo off
+set messages off
+
+# open the data and do some preliminary transformations
+include SVAR.gfn
+open infl_exp.gdt --quiet
+genr pi = diff(cpi) * 1200
+
+smpl --no-missing
+
+alternative_scheme = 0
+
+list X = pc e5 pi y m
+list exog = const
+
+# select lag length by aic
+var 15 X --lagselect --quiet
+p = 4
+
+if alternative_scheme
+#specify VAR properties
+    recMod = SVAR_setup("C", X, exog, p)
+    SVAR_cumulate(&recMod, 2)
+    recMod.horizon = 48
+
+# SR Restrictions
+
+    SVAR_restrict(&recMod, "C", 1, 2, 0)
+    SVAR_restrict(&recMod, "C", 1, 3, 0)
+    SVAR_restrict(&recMod, "C", 1, 4, 0)
+    SVAR_restrict(&recMod, "C", 1, 5, 0)
+
+    SVAR_restrict(&recMod, "C", 2, 3, 0)
+    SVAR_restrict(&recMod, "C", 2, 5, 0)
+    #SVAR_restrict(&recMod, "lrC", 2, 1, 0)
+
+    SVAR_restrict(&recMod, "C", 3, 4, 0)
+    SVAR_restrict(&recMod, "C", 3, 5, 0)
+
+    SVAR_restrict(&recMod, "C", 4, 5, 0)
+
+    SVAR_restrict(&recMod, "C", 5, 4, 0)
+    #SVAR_restrict(&recMod, "C", 5, 2, 0)
+else
+    recMod = SVAR_setup("plain", X, exog, p)
+    SVAR_cumulate(&recMod, 2)
+endif
+
+# estimation 
+SVAR_estimate(&recMod)
+#bfail = SVAR_boot(&recMod, 100, 0.90)
+
+fevdmat = FEVD(&recMod)
+#FEVDplot(&recMod, 2)
+
+loop for res=1..5 --quiet
+    loop for imp=1..5 --quiet
+        if alternative_scheme
+            sprintf fevdfile "C:\Users\mxc13.FU-BERLIN\Desktop\inflation expectations\master_thesis\gretl\grafics\alternative_Mod\FEVD_expect.pdf"
+            sprintf irffile "C:\Users\mxc13.FU-BERLIN\Desktop\inflation expectations\master_thesis\gretl\grafics\alternative_Mod\irf_imp%d_res%d.pdf", imp, res
+        else
+            sprintf fevdfile "C:\Users\mxc13.FU-BERLIN\Desktop\inflation expectations\master_thesis\gretl\grafics\recursive_Mod\FEVD_expect.pdf" 
+            sprintf irffile "C:\Users\mxc13.FU-BERLIN\Desktop\inflation expectations\master_thesis\gretl\grafics\recursive_Mod\irf_imp%d_res%d.pdf", imp, res
+        endif
+        
+        IRFsave(irffile, &recMod, imp, res, 2)
+        
+    endloop
+endloop
+FEVDsave(fevdfile, &recMod, 2)
+IRFplot(&recMod)
+
