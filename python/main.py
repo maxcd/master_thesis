@@ -5,6 +5,7 @@ Created on Fri Aug 18 16:31:06 2017
 @author: mxc13
 """
 import numpy as np
+np.set_printoptions(suppress=True)
 
 e, cpi, y, pc, m  = np.loadtxt(r"..\data\epiypcomm_Jan92_Feb17.txt").transpose()
 data = np.concatenate([pc[:,np.newaxis], e[:,np.newaxis], cpi[:,np.newaxis], y[:,np.newaxis],  m[:,np.newaxis]], axis=1)
@@ -21,14 +22,11 @@ model = VECM(data, p, r, var_names=var_names, shock_names=shocks)
 
 print('\nReduced form residual covariance matrix Sigma:\n',
       model.Sigma_u)
-#print(model.beta)
-model.normalize()
-#print('\nComnpanion matrix form of the VAR:\n', model.companion)
-#print(model.beta)
+
 #model.get_LR_impact()
 #print('\nshort run estimates Gamma\n:', model.Gamma)
 
-print('\nlong run matrix XI:\n', model.Xi)
+print('\nlong run matrix Xi:\n', model.Xi)
 
 ''' reproduce restrictions from Helmut
     where 0 means restriced and 1 means unrestricted
@@ -49,7 +47,7 @@ LR = LR == 1.
 
 model.set_restrictions(SR, LR)
 
-B0inv_guess = np.random.rand(3,3)#np.linalg.cholesky(model.Sigma_u)
+B0inv_guess = np.random.rand(model.K,model.K)#np.linalg.cholesky(model.Sigma_u)
 #errs = model.restriction_errors(B0inv_guess)
 #print(errs)
 model.get_B0inv(B0inv_guess)
@@ -57,9 +55,9 @@ model.get_B0inv(B0inv_guess)
 
 print('\nResult for B0inv:\n', model.B0inv)
 
-print('\nCompare to cholesky:\n', np.linalg.cholesky(model.Sigma_u))
+#print('\nCompare to cholesky:\n', np.linalg.cholesky(model.Sigma_u))
 
 print('\nResult for Upsilon:\n', model.Xi @ model.B0inv)
 
-irf_fig = model.get_irfs(nsteps=40, B='chol', plot=True, imps=[4])
+irf_fig = model.get_irfs(nsteps=40, B='chol', plot=True)
 irf_fig.savefig('irf.pdf')

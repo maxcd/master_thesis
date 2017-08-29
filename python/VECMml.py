@@ -39,12 +39,12 @@ class VECM(object):
         '''
         self.var_names = var_names
         self.B0inv = None
-        
+
         if shock_names is None:
             self.shock_names = var_names
         else:
             self.shock_names = shock_names
-        
+
         self.p = p
         y = data
         self.r = r
@@ -79,7 +79,6 @@ class VECM(object):
         Smat = iS11sq @ S01.transpose() @ la.pinv(S00) @ S01 @ iS11sq
 
         ''' compute the ML estmates for alpha and beta '''
-        #print(S01) # this is actually very diffent from the matrix in Helmuts code..dont know why
         eigenvals, eigenvecs = la.eig(Smat, right=True)
         index = np.argsort(eigenvals)[::-1]
         eigenvals = eigenvals[index]
@@ -88,11 +87,10 @@ class VECM(object):
         B = eigenvecs[:,index]
         B = -B
 
-        'compute estimates of the long run parameters'
         beta = iS11sq @ B[:,:r]
         alpha = S01 @ beta @ la.pinv(beta.transpose() @ S11 @ beta)
 
-        'compute the short-run parameters for the differences terms'
+        'compute the short-run parameters for the differenced terms'
         Gamma = ( (dy - alpha @ beta.transpose() @ y) @ X.transpose() @
                  la.pinv(X @ Xt) )
 
@@ -101,7 +99,7 @@ class VECM(object):
         Sigma = U @ U.transpose() / (T - p)
 
         self.alpha = alpha
-        self.beta = beta  
+        self.beta = beta
         self.Gamma = Gamma
         self.Sigma_u = Sigma
         self.residuals = U
@@ -113,34 +111,34 @@ class VECM(object):
         self.X = X
         self.q = q
         K = Sigma.shape[0] # number of variables
-        self.K = K 
+        self.K = K
 
-    def normalize(self):
-        alpha, beta , Gamma = self.alpha, self.beta, self.Gamma
-        K, p = self.K, self.p
+    # def normalize(self):
+    #     alpha, beta , Gamma = self.alpha, self.beta, self.Gamma
+    #     K, p = self.K, self.p
 
         Q = beta[:self.r,:]
         alpha_norm = alpha @ Q.transpose()
         beta_norm = beta @ la.inv(Q)
         Gamma_norm = Gamma[:,1:self.q+1]
 
-        self.alpha = alpha_norm
-        self.beta = beta_norm
+        self.alpha_norm = alpha_norm
+        self.beta_norm = beta_norm
         self.Gamma_norm = Gamma_norm
-        
+
         '''
             make companion form based on normalized alpha and beta
             TODO: comnpanion form general for p lags, not only for one.
         '''
-        
+
         KP = K * p
         I = np.identity(KP-K)
         I = np.concatenate((I, np.zeros([KP - K,K])), axis=1)
-        
-        
+
+
         slopes = Gamma[:,-((p-1) * (K)):]
         gam_lag = slopes
-        
+
         if p > 2:
             for lag in range(2,p):
                 print(lag)
@@ -149,12 +147,22 @@ class VECM(object):
                 gam_lag = slopes[:,first:last]
                 gam_lag_minus1 = slopes[:,(first+K):(last+K)]
                 gam_lag += gam_lag_minus1
-                slopes[:,(first):(last)] = gam_lag            
+                slopes[:,(first):(last)] = gam_lag
 
         A1 = alpha_norm @ beta_norm.T + np.identity(K) + gam_lag
         params = np.concatenate((A1, -1*slopes), axis=1)
         #print('\nparams:\n',params)
         self.companion = np.concatenate((params,I), axis=0)
+
+        ' compute long run impact matrix '
+        alpha_perp = self.perp(alpha_norm)
+        beta_perp = self.perp(beta_norm)
+
+        lr_mat = np.identity(self.q) - Gamma[:,1:self.q+1]
+        inv_mat = la.pinv(alpha_perp.transpose() @ lr_mat @ beta_perp)
+        Xi = beta_perp @ inv_mat @ alpha_perp.transpose()
+
+        self.Xi = Xi
 
     def perp(self, A):
         '''
@@ -165,120 +173,114 @@ class VECM(object):
         A_perp = Q[:, r:K]
         return A_perp
 
-    def get_LR_impact(self):
-        alpha, beta , Gamma = self.alpha, self.beta, self.Gamma
-
-        alpha_perp = self.perp(alpha)
-        beta_perp = self.perp(beta)
-
-        lr_mat = np.identity(self.q) - Gamma[:,1:self.q+1]
-        inv_mat = la.pinv(alpha_perp.transpose() @ lr_mat @ beta_perp)
-        Xi = beta_perp @ inv_mat @ alpha_perp.transpose()
-
-        self.Xi = Xi
-    
     def set_restrictions(self, SR, LR):
         '''
             Specify the zero restrictions to B0inv and Upsilon:
-            
+
             SR, LR : array of size K x K
-                entry 0 
+                entry 0
         '''
         self.SR = SR
         self.LR = LR
-        
+
     def restriction_errors(self, B0inv_vec):
         Xi = self.Xi
         Sigma = self.Sigma_u
         K = Sigma.shape[0]
         Gamma = self.Gamma
-        
+
         B0inv = B0inv_vec.reshape((self.K, self.K))
         # short run restrictions from helmut
         #0inv = B0inv.flatten()
         #SR = ~self.SR.flatten()
-        
+
         B_err = B0inv[~self.SR]
-        
+
         # LR restrictions
-        
+
         Upsilon = Xi @ B0inv
         #Upsilon = Upsilon.flatten()
         #LR = ~self.LR.flatten()
         Ups_err = Upsilon[~self.LR]
-     
+
         # exact identification 'restrictions'
         Sigma_err = B0inv @ B0inv.T - Sigma
         Sig_err = Sigma_err.flatten()
 
-        
+
         err_vec = np.concatenate([Sig_err, B_err, Ups_err])
         return err_vec
-        
+
     def get_B0inv(self, start=None):
         '''
             TODO: add normalization so sign
         '''
         if start is None:
             start = np.random.rand(3,3) #np.linalg.cholesky(self.Sigma_u)
-        
+
         settings ={'xtol':1e-10, 'ftol':1e-10, 'maxiter':100000000,
-                   'eps':1e-20, 'gtol':1e-20} 
+                   'eps':1e-20, 'gtol':1e-20}
         opt_res = root(self.restriction_errors, start, method='lm',
                        options=settings)
-        
+
         self.opt_res = opt_res
         B0inv = opt_res.x.reshape((self.K, self.K))
-        self.B0inv = B0inv 
-        
-    def get_irfs(self, nsteps, B=None, plot=False, imps=None, resps=None):       
-        
+
+        ' normalize the sign of the shocks to positive '
+        for col in range(B0inv.shape[1]):
+            if B0inv[col, col] < 0:
+                B0inv[:,col] = B0inv[:,col] * -1
+
+        self.B0inv = B0inv
+
+    def get_irfs(self, nsteps, B=None, plot=False, imps=None, resps=None):
+
         C = self.companion
         K = self.K
         P = self.p
         var_names = self.var_names
-        
-        
+
+
         if B is None:
             B = self.B0inv
         elif B == 'chol':
             B = np.linalg.cholesky(self.Sigma_u)
         else:
             B=np.identity(self.K)
-        
+
         '''  get entire inpulse response matrices :
         big_IRF contains all the impulse responses to every shock in the model
         every row corresponds to the response of one of he K variables and
         every Kth column of the row is the response to the Kth shock of that variable
         '''
-        
+
         IRF = np.concatenate((B, np.zeros([K * P - K, K])), axis=0)
         big_IRF = B
         for i in np.arange(1, nsteps):
             new_IRF = np.dot(C, IRF)
             big_IRF = np.concatenate((big_IRF, new_IRF[:K,:K]), axis=1)
             IRF = new_IRF
-    
+
         '''reorganize such that irfs_organized[periods, #impulse, #response]
         '''
-        
+
         irfs_organized = np.zeros((nsteps,K,K))
         for impulse in range(K):
             subset = list(np.arange(impulse ,nsteps*K , K))
             irfs_organized[:,impulse,:]=  big_IRF[:,subset].T
-        
+
         self.irfs = irfs_organized
-        
+
         if plot == True:
             if imps is None:
                 imps = np.arange(len(self.shock_names))
-            
+
             if resps is None:
                 resps = np.arange(len(self.var_names))
 
             n_imp = len(imps)
             n_res = len(resps)
-            
+
             fig, axes = plt.subplots(n_res, n_imp)
 
             if n_imp == 1: axes = axes[:,np.newaxis]
@@ -289,7 +291,7 @@ class VECM(object):
                     axes[r,i].plot(np.zeros(nsteps), 'k:')
                     axes[r,i].plot(irfs_organized[:,i,r], label=self.var_names[r])
                     if i==0: axes[r,i].set_ylabel(self.var_names[r])
-                
+
             #fig.suptitle('Impulse responses', fontsize=16)
             plt.tight_layout()
             return fig
