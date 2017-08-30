@@ -1,3 +1,20 @@
+# loop to test fpor serial correlation 
+lm_row <- function(varest_model,H_max, type = "PT.asymptotic"){
+  H = c(1:H_max)
+  p_vals = c(rep(0,H_max))
+  
+  for (h in H){
+    if (type == "BG"| type == "ES"){
+      test <- serial.test(varest_model, lags.bg = h, type = type)
+    }
+    else {
+      test <- serial.test(varest_model, lags.pt = h, type = type)
+    }
+    
+    p_vals[h] <- test$serial$p.value
+  }
+  return(p_vals)
+}
 
 # read data in
 na.data <- na.omit(read.csv2("..//data//monthly_preferred_1.csv", sep=";", stringsAsFactors = FALSE))
@@ -9,13 +26,13 @@ data <- na.data[num.nas:470,]
 as.numeric(data$l_pnfuel)
 
 
-sample <- data.frame(cbind(as.numeric(data$l_pnfuel),
+sample <- data.frame(cbind(as.numeric(data$e1),
                            as.numeric(data$e5),
                            as.numeric(data$cpi),
                            as.numeric(data$l_rgdp),
                            as.numeric(data$l_dm2m)))
 
-s_full <-  ts(cbind(as.numeric(data$l_pnfuel),
+s_full <-  ts(cbind(as.numeric(data$e1),
                   as.numeric(data$e5),
                   as.numeric(data$cpi),
                   as.numeric(data$l_rgdp),
@@ -50,7 +67,7 @@ library(strucchange) #for endogenous break point test
 #######################################################
 
 lags <- VARselect(s_full, lag.max = 24)$selection[1]
-mod_s_full <- VAR(s_full, p = 9, type = "const")
+mod_s_full <- VAR(s_full, p = 13, type = "const")
 Sig <- mod_s_full$obs
 summary(mod_s_full)
 
@@ -58,26 +75,11 @@ mod_s_full$Series.residuals
 
 # testing for serial correlation 
 
-lm_row <- function(varest_model,H_max, type = "PT.asymptotic"){
-  H = c(1:H_max)
-  p_vals = c(rep(0,H_max))
-  
-  for (h in H){
-    if (type == "BG"| type == "ES"){
-      test <- serial.test(varest_model, lags.bg = h, type = type)
-    }
-    else {
-      test <- serial.test(varest_model, lags.pt = h, type = type)
-    }
-    
-  p_vals[h] <- test$serial$p.value
-  }
-  return(p_vals)
-}
-p_vals <- lm_row(mod_s_full, H_max=1, type = "PT.adjusted")
+
+p_vals <- lm_row(mod_s_full, H_max=18, "ES")
 p_vals
 
-serial.test(mod_s_full, lags.bg = 4, type = "ES")
+serial.test(mod_s_full, lags.bg = 4, type = "BG")
 
 # some stability tests
 mod_s_full.reccusum <- stability(mod_s_full, type = "OLS-CUSUM")

@@ -27,16 +27,17 @@ def plot_irfs(irf_mat, lower_ci, upper_ci, imps=None, resps=None, var_names=None
         for ii, i in enumerate(imps):
             if ri==0 : axes[ri,ii].set_title(shock_names[i])
             x = irf_mat[:,r,i]
+            xi = np.arange(len(x))
             if upper_ci is not None: ci_u = upper_ci[:,r, i]
             if lower_ci is not None: ci_l = lower_ci[:,r, i]
             if shock_names[i] == 'mon. pol':
                 x = -1*x
                 ci_u = -1*ci_u
                 ci_l = -1*ci_l
-            axes[ri,ii].plot(np.zeros(nsteps), 'k:')
+            axes[ri,ii].plot(np.zeros(len(x)), 'k:', lw=0.5)
             axes[ri,ii].plot(x, label=var_names[r])
 
-            axes[ri,ii].fill_between(np.arange(49), ci_l, ci_u, alpha=0.3)
+            axes[ri,ii].fill_between(xi, ci_l, ci_u, alpha=0.3)
 
             if ri < len(resps)-1: axes[ri,ii].get_xaxis().set_visible(False)
             if ii==0: axes[ri,ii].set_ylabel(var_names[r])
